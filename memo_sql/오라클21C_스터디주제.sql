@@ -1,3 +1,18 @@
+
+--테이블 생성 및 데이터 삽입
+CREATE TABLE ORDERS (
+    ORDER_ID NUMBER PRIMARY KEY,
+    CUSTOMER_ID NUMBER,
+    ORDER_DATE DATE,
+    ORDER_DETAILS JSON -- 주문 상세 정보를 JSON 형태로 저장
+);
+
+INSERT INTO ORDERS (ORDER_ID, CUSTOMER_ID, ORDER_DATE, ORDER_DETAILS) VALUES (101, 1, DATE '2025-01-15', '{"items": [{"product_name": "Laptop", "qty": 1, "price": 1200}, {"product_name": "Mouse", "qty": 1, "price": 25}], "shipping_address": {"street": "123 Main St", "city": "Seoul","zip": "03100"}, "total_amount": 1225}');
+INSERT INTO ORDERS (ORDER_ID, CUSTOMER_ID, ORDER_DATE, ORDER_DETAILS) VALUES (102, 2, DATE '2025-02-20', '{"items": [{"product_name": "Keyboard", "qty": 1, "price": 75}, {"product_name": "Monitor", "qty": 2, "price": 300}], "shipping_address": {"street": "456 Park Ave", "city": "Busan", "zip": "48000"}, "total_amount": 675}');
+INSERT INTO ORDERS (ORDER_ID, CUSTOMER_ID, ORDER_DATE, ORDER_DETAILS) VALUES (103, 1, DATE '2025-03-10', '{"items": [{"product_name": "Webcam", "qty": 1, "price": 50}], "shipping_address": {"street": "123 Main St", "city": "Seoul", "zip": "03100"}, "total_amount": 50}');
+INSERT INTO ORDERS (ORDER_ID, CUSTOMER_ID, ORDER_DATE, ORDER_DETAILS) VALUES (104, 3, DATE '2025-04-05', '{"items": [{"product_name": "Headphones", "qty": 1, "price": 150}, {"product_name": "Microphone", "qty": 1, "price": 80}], "shipping_address": {"street": "789 River Rd", "city": "Daegu", "zip": "41900"}, "total_amount": 230}');
+COMMIT;
+
 --1. 모든 주문의 ORDER_ID와 ORDER_DETAILS 전체를 조회하세요.
 SELECT ORDER_ID, ORDER_DETAILS
 FROM ORDERS
@@ -38,7 +53,7 @@ FROM ORDERS o
 --COLUMNS () : json_table 에서 테이블의 컬럼으로 만들것인지 정의 여기서는 
 
 
---비고 .size()
+--비고 .size() : JSON Path 안에서 사용하는 size() 내장 함수
 SELECT ORDER_ID, 
        json_value(ORDER_DETAILS, '$.items.size()'), 
        json_value(ORDER_DETAILS, '$.total_amount')
@@ -96,38 +111,6 @@ GROUP BY  o.ORDER_ID
 --오라클 버전확인
 SELECT * FROM V$VERSION;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-CREATE BLOCKCHAIN TABLE AUDIT_LOG (
-    LOG_ID RAW(16) DEFAULT SYS_GUID() NOT NULL,
-    EVENT_TYPE VARCHAR2(50) NOT NULL,
-    EVENT_DETAILS VARCHAR2(200),
-    EVENT_TIMESTAMP TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
-    ACTOR_USER VARCHAR2(50) NOT NULL
-    ) NO DROP UNTIL 0 DAYS NO DELETE UNTIL 0 DAYS;
-
-
-CREATE BLOCKCHAIN TABLE AUDIT_LOG (
-  LOG_ID RAW(16) DEFAULT SYS_GUID() NOT NULL,
-  EVENT_TYPE VARCHAR2(50) NOT NULL,
-  EVENT_DETAILS VARCHAR2(200),
-  EVENT_TIMESTAMP TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
-  ACTOR_USER VARCHAR2(50) NOT NULL
-)
-NO DROP UNTIL 0 DAYS 
-NO DELETE UNTIL 0 DAYS
-SEGMENT CREATION IMMEDIATE;
 
 
 
