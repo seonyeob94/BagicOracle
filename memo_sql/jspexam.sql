@@ -1,4 +1,5 @@
 --카멜케이스 생성
+
 SELECT COLUMN_NAME
 , DATA_TYPE
 , CASE WHEN DATA_TYPE='NUMBER' THEN 'private int ' || FN_GETCAMEL(COLUMN_NAME) || ';'
@@ -7,8 +8,9 @@ WHEN DATA_TYPE='DATE' THEN 'private Date ' || FN_GETCAMEL(COLUMN_NAME) || ';'
 ELSE 'private String ' || FN_GETCAMEL(COLUMN_NAME) || ';'
 END AS CAMEL_CASE
 , '<result property="'||FN_GETCAMEL(COLUMN_NAME)||'" column="'||COLUMN_NAME||'"/>' RESULTMAP
+, '#{' || FN_GETCAMEL(COLUMN_NAME) || '},'
 FROM ALL_TAB_COLUMNS
-WHERE TABLE_NAME = 'FILE_DETAIL'
+WHERE TABLE_NAME = 'MEMBER'
 AND    OWNER = 'JSPEXAM';
 
 
@@ -382,5 +384,41 @@ WHERE   SUBSTR(FILE_GROUP_NO,1,8) = TO_CHAR(SYSDATE,'YYYYMMDD');
 --문자형변환함수(20250618)
 SELECT  TO_CHAR(SYSDATE,'YYYYMMDD') 
 FROM    DUAL;
+
+
+--FILE_DETAIL 테이블의 마지막 FILE_SN 값 +1 구하기
+--단, FILE_SN는 주어진 FILE_GROUP_NO의 값을 조건으로 하기
+--단, FILE_SN의 값이 NULL이면 NULL처리하기
+--파일을 업로드 했고, 오늘 첫번째 그룹으로써 업로드함
+--상세 테이블에는 3개의 파일이 있더라
+
+SELECT NVL(MAX(D.FILE_SN),0)+1
+FROM FILE_DETAIL D
+JOIN FILE_GROUP G ON G.FILE_GROUP_NO=D.FILE_GROUP_NO
+
+
+SELECT NVL(MAX(FILE_SN),0)+1
+FROM FILE_DETAIL
+WHERE FILE_GROUP_NO='20250619001'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

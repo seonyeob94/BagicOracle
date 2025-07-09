@@ -263,19 +263,4 @@ INSERT INTO sensor_readings (sensor_name, reading_value, reading_timestamp, loca
 
 
 
-CREATE TABLE product_catalog_copy AS
-SELECT product_id, TO_CHAR(product_info) AS product_info
-FROM product_catalog;
 
-
-SELECT jt."reviewer", jt."comment"
-FROM   product_catalog_copy c,
-       JSON_TABLE(
-         c.product_info,
-         '$.reviews[*]'
-         COLUMNS (
-           "reviewer" VARCHAR2(100) PATH '$.user',
-           "comment"  VARCHAR2(100) PATH '$.comment',
-           "rating"   NUMBER        PATH '$.rating'
-         )
-       ) jt;
