@@ -15,7 +15,8 @@ CREATE TABLE HIGH_SCHOOL (
     HS_GENERAL_TYPE    VARCHAR2(6),              -- 일반계/전문계
     HS_FOUND_DATE      DATE,                     -- 설립일자
     HS_ANNIV_AT        DATE,                     -- 개교기념일
-    HS_TOTAL_STUDENTS  NUMBER                    -- 전교생 수
+    HS_LAT             NUMBER                    -- 위도
+    HS_LOT             NUMBER                    -- 경도
 );
 
 -- PK 지정
@@ -39,7 +40,8 @@ COMMENT ON COLUMN HIGH_SCHOOL.HS_TYPE_NAME      IS '학교종류구분';
 COMMENT ON COLUMN HIGH_SCHOOL.HS_GENERAL_TYPE   IS '학교일반/전문계 구분';
 COMMENT ON COLUMN HIGH_SCHOOL.HS_FOUND_DATE     IS '설립일자';
 COMMENT ON COLUMN HIGH_SCHOOL.HS_ANNIV_AT       IS '개교기념일';
-COMMENT ON COLUMN HIGH_SCHOOL.HS_TOTAL_STUDENTS IS '전교생 수';
+COMMENT ON COLUMN HIGH_SCHOOL.HS_LATS           IS '위도';
+COMMENT ON COLUMN HIGH_SCHOOL.HS_LOT            IS '경도';
 
 ------------------------------------------------------------
 
