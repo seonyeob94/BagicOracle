@@ -187,3 +187,27 @@ commit;
 UPDATE COM_CODE
 SET CREATED_BY = 'LSY',
     UPDATED_BY = 'LSY';
+    
+--CONTEST_SEQ 시퀀스 생성
+CREATE SEQUENCE CONTEST_SEQ
+   START WITH 1      -- 1부터 시작 (원하는 시작값으로 변경 가능)
+   INCREMENT BY 1    -- 1씩 증가
+   NOMAXVALUE        -- 최대값 없음
+   NOCYCLE           -- 반복하지 않음
+   CACHE 20;         -- 캐시 크기 (성능 향상, 기본값 20)
+       
+-- FILE_GROUP_SEQ 시퀀스 생성
+CREATE SEQUENCE FILE_GROUP_SEQ
+       START WITH 1         -- 1부터 시작 (시작값은 원하는 대로 변경 가능)
+       INCREMENT BY 1       -- 1씩 증가
+       NOMAXVALUE           -- 최대값 없음
+       NOCYCLE              -- 반복하지 않음 (끝까지 가면 다시 시작하지 않음)
+       CACHE 20;            -- 캐시 크기 (성능 향상을 위해, 기본값 20)
+
+-- FILE_DETAIL_SEQ 시퀀스 생성
+CREATE SEQUENCE FILE_DETAIL_SEQ
+       START WITH 1
+       INCREMENT BY 1
+       NOMAXVALUE
+       NOCYCLE
+       CACHE 20;
