@@ -281,3 +281,108 @@ INSERT ALL
     INTO COM_CODE (CC_ID, CL_CODE, CC_NAME, USE_YN, CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY) VALUES ('G35017', 'G35', '취업/창업', 'Y', SYSDATE, 'LSY', SYSDATE, 'LSY')
     INTO COM_CODE (CC_ID, CL_CODE, CC_NAME, USE_YN, CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY) VALUES ('G35018', 'G35', '해외', 'Y', SYSDATE, 'LSY', SYSDATE, 'LSY')
 SELECT * FROM DUAL; -- DUAL 테이블을 사용하여 INSERT ALL 문을 완성
+
+
+ALTER TABLE PAYMENT ADD (PAY_STATUS VARCHAR2(50) DEFAULT 'PENDING' NOT NULL);
+ALTER TABLE PAYMENT ADD (MEM_SUB_ID NUMBER);
+ALTER TABLE PAYMENT ADD (IMP_UID VARCHAR2(50) NOT NULL);
+ALTER TABLE PAYMENT ADD (MERCHANT_UID VARCHAR2(100) NOT NULL);
+
+ALTER TABLE MEMBER_SUBSCRIPTION MODIFY SUBSCRIBE_STATUS DROP DEFAULT;
+
+COMMENT ON COLUMN PAYMENT.IMP_UID IS '결제 건별 고유 식별자';
+COMMENT ON COLUMN PAYMENT.MERCHANT_UID IS '주문 건별 고유 식별자';
+----------------------------------------------
+-- MEMBER_SUBSCRIPTION 테이블을 위한 시퀀스 생성 (옵션)
+CREATE SEQUENCE MEMBER_SUBSCRIPTION_SEQ
+START WITH 1
+INCREMENT BY 1
+NOCACHE
+NOCYCLE;
+
+-- MEMBER_SUBSCRIPTION 테이블 생성
+CREATE TABLE MEMBER_SUBSCRIPTION (
+    MS_ID           NUMBER          NOT NULL, -- 회원별 구독 ID (Primary Key)
+    MEM_ID          NUMBER          NOT NULL, -- 회원 ID
+    SUB_ID          NUMBER          NOT NULL, -- 구독 상품 ID
+    CUSTOMER_UID    VARCHAR2(100)   NOT NULL, -- 아임포트 고객 고유 식별자 (빌링키 용도)
+    SUB_STATUS      CHAR(1)         NOT NULL, -- 구독 상태 (예: 'Y' 활성, 'N' 비활성, 'R' 예약)
+    NEXT_PAY_DT     DATE,                     -- 다음 결제 예정일
+    SUB_START_DT    DATE            DEFAULT SYSDATE, -- 구독 시작일
+    SUB_END_DT      DATE,                     -- 구독 종료일
+    LAST_PAY_DT     DATE,                     -- 최종 결제 성공일
+    RECUR_PAY_CNT   NUMBER          DEFAULT 0, -- 정기 결제 성공 횟수
+    CREATED_DT      TIMESTAMP       DEFAULT SYSTIMESTAMP, -- 생성 일시
+    UPDATED_DT      TIMESTAMP       DEFAULT SYSTIMESTAMP, -- 최종 수정 일시
+    CONSTRAINT PK_MEMBER_SUBSCRIPTION PRIMARY KEY (MS_ID)
+);
+
+-- 테이블 및 컬럼 코멘트 추가 (Oracle에서만 사용 가능)
+COMMENT ON TABLE MEMBER_SUBSCRIPTION IS '회원 구독 정보';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.MS_ID IS '회원별 구독 ID';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.MEM_ID IS '회원 ID';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.SUB_ID IS '구독 상품 ID';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.CUSTOMER_UID IS '고객 고유 식별자';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.SUB_STATUS IS '구독 상태';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.NEXT_PAY_DT IS '다음 결제 예정일';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.SUB_START_DT IS '구독 시작일';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.SUB_END_DT IS '구독 종료일';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.LAST_PAY_DT IS '최종 결제 성공일';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.RECUR_PAY_CNT IS '정기 결제 성공 횟수';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.CREATED_DT IS '생성 일시';
+COMMENT ON COLUMN MEMBER_SUBSCRIPTION.UPDATED_DT IS '최종 수정 일시';
+
+-------------------------------------------------------
+
+
+-- PAYMENT 테이블을 위한 시퀀스 생성 (옵션)
+CREATE SEQUENCE PAYMENT_SEQ
+START WITH 1
+INCREMENT BY 1
+NOCACHE
+NOCYCLE;
+
+-- PAYMENT 테이블 생성
+CREATE TABLE PAYMENT (
+    PAY_ID          NUMBER          NOT NULL, -- 결제 식별 번호 (Primary Key)
+    PAY_DATE        DATE            DEFAULT SYSDATE, -- 결제일
+    PAY_AMOUNT      NUMBER          NOT NULL, -- 구독 결제 금액
+    PAY_RESUME_CNT  NUMBER,                   -- 이전 서술 횟수 (예측값, 정확한 의미는 추정 필요)
+    PAY_CONSULT_CNT NUMBER,                   -- 상담 횟수 (예측값, 정확한 의미는 추정 필요)
+    PAY_MOCK_CNT    NUMBER,                   -- 모의면접 횟수 (예측값, 정확한 의미는 추정 필요)
+    MS_ID           NUMBER,                   -- 회원별 구독 고유 ID (Foreign Key로 예상)
+    IMP_UID         VARCHAR2(50),             -- 결제 건별 고유 식별자 (아임포트 결제 고유번호)
+    MERCHANT_UID    VARCHAR2(100),            -- 주문 번호 고유 식별자
+    CONSTRAINT PK_PAYMENT PRIMARY KEY (PAY_ID)
+);
+
+-- 테이블 및 컬럼 코멘트 추가 (Oracle에서만 사용 가능)
+COMMENT ON TABLE PAYMENT IS '결제 내역 정보';
+COMMENT ON COLUMN PAYMENT.PAY_ID IS '결제 식별 번호';
+COMMENT ON COLUMN PAYMENT.PAY_DATE IS '결제일';
+COMMENT ON COLUMN PAYMENT.PAY_AMOUNT IS '구독 결제 금액';
+COMMENT ON COLUMN PAYMENT.PAY_RESUME_CNT IS '이력서 작성 횟수'; -- 코멘트와 컬럼명 조합
+COMMENT ON COLUMN PAYMENT.PAY_CONSULT_CNT IS '상담 횟수';
+COMMENT ON COLUMN PAYMENT.PAY_MOCK_CNT IS '모의면접 횟수';
+COMMENT ON COLUMN PAYMENT.PAY_ID IS '회원별 구독 고유 ID'; -- MS_ID에 대한 코멘트가 PAY_ID로 잘못 기록됨, 수정 필요
+COMMENT ON COLUMN PAYMENT.MS_ID IS '회원별 구독 고유 ID'; -- 올바른 코멘트로 수정
+COMMENT ON COLUMN PAYMENT.IMP_UID IS '결제 건별 고유 식별자';
+COMMENT ON COLUMN PAYMENT.MERCHANT_UID IS '주문 번호 고유 식별자';
+
+---------------------------------------------
+
+-- BASIC 상품
+INSERT INTO SUBSCRIBE (SUB_ID, SUB_NAME, SUB_PRICE, SUB_BENEFIT, SUB_ACTIVE_YN, SUB_ROLE) 
+VALUES (1, 'BASIC', 100, '이 구독상품은 베이직 해택의 상품입니다,이 상품의 이력서첨삭횟수는 3회입니다,이 상품의 자소서첨삭횟수는 3회입니다,이 상품의 상담횟수는 3회입니다,이 상품의 모의면접횟수는 3회입니다', 'Y', 'BASIC');
+
+-- PLUS 상품
+INSERT INTO SUBSCRIBE (SUB_ID, SUB_NAME, SUB_PRICE, SUB_BENEFIT, SUB_ACTIVE_YN, SUB_ROLE) 
+VALUES (2, 'PLUS', 200, '이 구독상품은 플러스 해택의 상품입니다,이 상품의 이력서첨삭횟수는 5회입니다,이 상품의 자소서첨삭횟수는 5회입니다,이 상품의 상담횟수는 5회입니다,이 상품의 모의면접횟수는 5회입니다', 'Y', 'PLUS');
+
+-- PRO 상품
+INSERT INTO SUBSCRIBE (SUB_ID, SUB_NAME, SUB_PRICE, SUB_BENEFIT, SUB_ACTIVE_YN, SUB_ROLE) 
+VALUES (3, 'PRO', 300, '이 구독상품은 프로 해택의 상품입니다,이 상품의 이력서첨삭횟수는 8회입니다,이 상품의 자소서첨삭횟수는 8회입니다,이 상품의 상담횟수는 8회입니다,이 상품의 모의면접횟수는 8회입니다', 'Y', 'PRO');
+
+
+-- 시퀀스 생성
+CREATE SEQUENCE MEM_SUB_SEQ;
