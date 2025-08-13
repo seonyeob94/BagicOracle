@@ -42,6 +42,9 @@ COMMENT ON COLUMN HIGH_SCHOOL.HS_FOUND_DATE     IS '설립일자';
 COMMENT ON COLUMN HIGH_SCHOOL.HS_ANNIV_AT       IS '개교기념일';
 COMMENT ON COLUMN HIGH_SCHOOL.HS_LATS           IS '위도';
 COMMENT ON COLUMN HIGH_SCHOOL.HS_LOT            IS '경도';
+COMMENT ON COLUMN HIGH_SCHOOL.HS_DEL_YN            IS '삭제여부';
+COMMENT ON COLUMN HIGH_SCHOOL_DEPT.HSD_DEL_YN            IS '삭제여부';
+
 
 ------------------------------------------------------------
 

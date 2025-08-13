@@ -1,20 +1,23 @@
 SELECT count(*)
-from CONTEST; -- CONTEST 테이블 421
+from CONTEST; -- CONTEST 테이블 446 437
 
-SELECT count(*)
-from FILE_DETAIL; --588
+SELECT count(*)--17
+from FILE_DETAIL; --463 464
 
-SELECT count(*)
-from CONTEST
-where CONTEST_GUBUN = 'G32001'; -- 공모전 248
-
-SELECT count(*)
-from CONTEST
-where CONTEST_TYPE IS NULL; -- 대외활동 173
+SELECT count(*)--21
+from FILE_GROUP; --463
 
 SELECT count(*)
 from CONTEST
-where CONTEST_GUBUN = 'G32002'; --서포터즈 63
+where CONTEST_GUBUN = 'G32001'; -- 공모전 268 285
+
+SELECT count(*)
+from CONTEST
+where CONTEST_TYPE IS NULL; -- 대외활동 178 158
+
+SELECT count(*)
+from CONTEST
+where CONTEST_GUBUN = 'G32002'; --서포터즈 61
 
 SELECT count(*)
 from CONTEST
@@ -22,80 +25,126 @@ where CONTEST_GUBUN = 'G32003'; --봉사활동 63
 
 SELECT count(*)
 from CONTEST
-where CONTEST_GUBUN = 'G32004'; --인턴십 47
+where CONTEST_GUBUN = 'G32004'; --인턴십 54
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '건축'; --건축 20
+where CONTEST_TYPE = 'G35001'; --건축 13
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '게임/소프트웨어'; --게임/소프트웨어 22
+where CONTEST_TYPE = 'G35002'; --게임/소프트웨어 25
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '과학'; --과학 18
+where CONTEST_TYPE = 'G35003'; --과학 13
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '광고/마케팅'; --광고/마케팅 22
+where CONTEST_TYPE = 'G35004'; --광고/마케팅 21
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '기획/아이디어'; --기획/아이디어 27
+where CONTEST_TYPE = 'G35005'; --기획/아이디어 32
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '네이밍/슬로건'; --네이밍/슬로건 13
+where CONTEST_TYPE = 'G35006'; --네이밍/슬로건 14
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '논문'; --논문 13
+where CONTEST_TYPE = 'G35007'; --논문 11
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '대회'; --대회 15
+where CONTEST_TYPE = 'G35008'; --대회 18
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '디자인'; --디자인 15
+where CONTEST_TYPE = 'G35009'; --디자인 15
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '만화/캐릭터'; --만화/캐릭터 8
+where CONTEST_TYPE = 'G35010'; --만화/캐릭터 11
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '문학/수기'; --문학/수기 23
+where CONTEST_TYPE = 'G35011'; --문학/수기 23
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '미술'; --미술 6
+where CONTEST_TYPE = 'G35012'; --미술 9
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '사진'; --사진 14
+where CONTEST_TYPE = 'G35013'; --사진 13
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '영상/UCC'; --영상/UCC 12
+where CONTEST_TYPE = 'G35014'; --영상/UCC 14
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '음악'; --음악 12
+where CONTEST_TYPE = 'G35015'; --음악 10
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '이벤트'; --이벤트 3
+where CONTEST_TYPE = 'G35016'; --이벤트 12
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '취업/창업'; --취업/창업 2
+where CONTEST_TYPE = 'G35017'; --취업/창업 12
 
 SELECT count(*)
 from CONTEST
-where CONTEST_TYPE = '해외'; --해외 2
+where CONTEST_TYPE = 'G35018'; --해외 2
 
 SELECT count(*)
 from CONTEST
 WHERE CONTEST_END_DATE > SYSDATE
+
+-- 1. CONTEST_SEQ 초기화
+DROP SEQUENCE CONTEST_SEQ;
+CREATE SEQUENCE CONTEST_SEQ
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+-- 2. FILE_DETAIL_SEQ 초기화
+DROP SEQUENCE FILE_DETAIL_SEQ;
+CREATE SEQUENCE FILE_DETAIL_SEQ
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+-- 3. FILE_GROUP_SEQ 초기화
+DROP SEQUENCE FILE_GROUP_SEQ;
+CREATE SEQUENCE FILE_GROUP_SEQ
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+    
+DELETE FROM FILE_GROUP
+WHERE FILE_GROUP_ID IN (
+    SELECT T1.FILE_GROUP_ID
+    FROM FILE_GROUP T1
+    LEFT JOIN FILE_DETAIL T2 ON T1.FILE_GROUP_ID = T2.FILE_GROUP_ID
+    WHERE T2.FILE_GROUP_ID IS NULL
+);
+
+commit
+
+SELECT T1.CONTEST_ID, T1.CONTEST_TITLE
+FROM CONTEST T1
+JOIN (
+    SELECT FILE_GROUP_ID
+    FROM FILE_GROUP
+    WHERE FILE_GROUP_ID NOT IN (SELECT FILE_GROUP_ID FROM FILE_DETAIL)
+) T2 ON T1.FILE_GROUP_ID = T2.FILE_GROUP_ID;
+
+select * from CONTEST
+where CONTEST_TITLE LIKE '%영천시 유튜브%';
+
+select * from CONTEST
+where CONTEST_TITLE LIKE '%정보보안 다짐%';
