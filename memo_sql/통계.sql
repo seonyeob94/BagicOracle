@@ -548,3 +548,26 @@ LEFT JOIN(
 ) TotalAmount ON M.STAT_DAYS = TotalAmount.DAYS
 
 ORDER BY M.STAT_DAYS;
+
+
+SELECT
+    TO_CHAR(l.PL_CREATED_AT, 'YYYY-MM-DD') AS "dt",
+    
+    -- '나의 활동 - 이력서' 로그 카운트
+    COUNT(CASE WHEN l.PL_TITLE = '이력서AI요청' THEN 1 END) AS "resumeCnt",
+    
+    -- '나의 활동 - 자기소개서' 로그 카운트
+    COUNT(CASE WHEN l.PL_TITLE = '자기소개서AI요청' THEN 1 END) AS "coverCnt"
+    
+    -- 참고: 모의면접 로그가 있다면 여기에 추가
+    -- COUNT(CASE WHEN l.PL_TITLE = '모의면접AI요청' THEN 1 END) AS "mockCnt"
+    
+FROM PAGE_LOG l
+JOIN MEMBER m ON l.MEM_ID = m.MEM_ID
+WHERE 
+    l.PL_TITLE IN ('이력서AI요청', '자기소개서AI요청' ,'모의면접AI요청')
+    AND l.PL_CREATED_AT >= TO_DATE('2025-08-01', 'YYYY-MM-DD')
+    AND l.PL_CREATED_AT < TO_DATE('2025-08-31', 'YYYY-MM-DD') + 1
+GROUP BY 
+    TO_CHAR(l.PL_CREATED_AT, 'YYYY-MM-DD')
+ORDER BY "dt" ASC;
