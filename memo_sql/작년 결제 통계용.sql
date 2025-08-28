@@ -1,155 +1,213 @@
 --------------------------------------------------------------------------------
--- 0) 전년도(2024-01-01 ~ 2024-09-03) 샘플 데이터를 올해(2025) 데이터 기반으로 생성
---    - 날짜: PAY_DATE/구독기간 -12개월 + 소폭 랜덤(결제)
---    - 금액/카운트: 월별 스케일(올해보다 전반적으로 적게, 몇 달은 많게) + 랜덤
---    - 중복 방지: 동일 고객UID(_ly) / MERCHANT_UID(LY_)가 있으면 스킵
---    - 외래키: 올해 MS_ID → 전년 신규 MS_ID로 매핑하여 결제에 연결
+-- 전년도 데이터 생성 프로시저 (TEAM1_202502F 계정 전용)
 --------------------------------------------------------------------------------
-
--- (선택) 동일 세션 내 임시 매핑 테이블
+CREATE OR REPLACE PROCEDURE GEN_LAST_YEAR_DATA (
+  p_2025_start   IN DATE DEFAULT DATE '2025-01-01',
+  p_2025_end     IN DATE DEFAULT DATE '2025-09-03',
+  p_2024_start   IN DATE DEFAULT DATE '2024-01-01',
+  p_2024_end     IN DATE DEFAULT DATE '2024-09-03',
+  p_jitter_days  IN NUMBER DEFAULT 20   -- PAYMENT 날짜 지터(±p_jitter_days)
+) AS
 BEGIN
-  EXECUTE IMMEDIATE 'DROP TABLE TEMP_MS_MAP PURGE';
-EXCEPTION WHEN OTHERS THEN NULL;
+  ------------------------------------------------------------------------------
+  -- 0) 보조 테이블 초기화
+  ------------------------------------------------------------------------------
+  EXECUTE IMMEDIATE 'TRUNCATE TABLE TEMP_MS_MAP';
+  EXECUTE IMMEDIATE 'TRUNCATE TABLE MONTHLY_TARGET';
+
+  ------------------------------------------------------------------------------
+  -- 1) 월별 목표 구독자 비율 값 삽입 (예시 값)
+  ------------------------------------------------------------------------------
+  INSERT INTO MONTHLY_TARGET (MONTH_KEY, RATIO)
+  SELECT '01',0.8 FROM DUAL UNION ALL
+  SELECT '02',0.7 FROM DUAL UNION ALL
+  SELECT '03',1.2 FROM DUAL UNION ALL
+  SELECT '04',0.9 FROM DUAL UNION ALL
+  SELECT '05',1.3 FROM DUAL UNION ALL
+  SELECT '06',0.7 FROM DUAL UNION ALL
+  SELECT '07',0.8 FROM DUAL UNION ALL
+  SELECT '08',1.4 FROM DUAL UNION ALL
+  SELECT '09',0.9 FROM DUAL;
+
+  ------------------------------------------------------------------------------
+  -- 2) 올해 결제 등장 MS_ID → 신규 전년도 MS_ID 매핑
+  ------------------------------------------------------------------------------
+  INSERT INTO TEMP_MS_MAP (OLD_MS_ID, NEW_MS_ID)
+  SELECT t.MS_ID, MEMBER_SUBSCRIPTION_SEQ.NEXTVAL
+  FROM (
+    SELECT DISTINCT p.MS_ID
+    FROM PAYMENT p
+    WHERE p.PAY_DATE BETWEEN p_2025_start AND p_2025_end
+  ) t;
+
+  COMMIT;
+
+  ------------------------------------------------------------------------------
+  -- 3) 전년도 MEMBER_SUBSCRIPTION 생성 (월별 목표비율 반영)
+  ------------------------------------------------------------------------------
+  INSERT INTO MEMBER_SUBSCRIPTION (
+    MS_ID, MEM_ID, SUB_ID, CUSTOMER_UID, SUB_STATUS,
+    SUB_START_DT, SUB_END_DT, LAST_PAY_DT,
+    RECUR_PAY_CNT, CREATED_DT, UPDATED_DT
+  )
+  WITH BASE AS (
+    SELECT
+      m.NEW_MS_ID,
+      ms.MEM_ID,
+      ms.SUB_ID,
+      ms.CUSTOMER_UID,
+      ms.SUB_STATUS,
+      ADD_MONTHS(ms.SUB_START_DT, -12) AS BASE_START,
+      ADD_MONTHS(ms.SUB_END_DT,   -12) AS BASE_END,
+      ADD_MONTHS(ms.LAST_PAY_DT,  -12) AS BASE_LAST,
+      ADD_MONTHS(ms.CREATED_DT,   -12) AS BASE_CREATED,
+      ADD_MONTHS(ms.UPDATED_DT,   -12) AS BASE_UPDATED,
+      (ms.SUB_END_DT - ms.SUB_START_DT) AS DURATION_DAYS,
+      ( SELECT COUNT(*)
+          FROM PAYMENT p2025
+         WHERE p2025.MS_ID = ms.MS_ID
+           AND p2025.PAY_DATE BETWEEN p_2025_start AND p_2025_end
+      ) AS TARGET_CNT
+    FROM MEMBER_SUBSCRIPTION ms
+    JOIN TEMP_MS_MAP m ON m.OLD_MS_ID = ms.MS_ID
+    WHERE NOT EXISTS (
+      SELECT 1 FROM MEMBER_SUBSCRIPTION ms2
+      WHERE ms2.CUSTOMER_UID = ms.CUSTOMER_UID || '_ly'
+    )
+  ),
+  WITH_RATIO AS (
+    SELECT
+      b.*,
+      mt.RATIO,
+      TO_CHAR(b.BASE_START,'MM') AS MM
+    FROM BASE b
+    JOIN MONTHLY_TARGET mt ON mt.MONTH_KEY = TO_CHAR(b.BASE_START,'MM')
+  ),
+  SHIFTED AS (
+    SELECT
+      w.*,
+      CASE
+        WHEN DBMS_RANDOM.VALUE(0,1) < (w.RATIO - 1) AND w.RATIO > 1
+          THEN +1
+        WHEN DBMS_RANDOM.VALUE(0,1) < (1 - w.RATIO) AND w.RATIO < 1
+          THEN -1
+        ELSE 0
+      END AS MONTH_DELTA,
+      TRUNC(DBMS_RANDOM.VALUE(-10, 11)) AS JIT_DAYS
+    FROM WITH_RATIO w
+  )
+  SELECT
+    NEW_MS_ID,
+    MEM_ID,
+    SUB_ID,
+    CUSTOMER_UID || '_ly',
+    'N',
+    ADD_MONTHS(BASE_START, MONTH_DELTA) + JIT_DAYS,
+    ADD_MONTHS(BASE_START, MONTH_DELTA) + JIT_DAYS + DURATION_DAYS,
+    CASE WHEN BASE_LAST IS NULL THEN NULL
+         ELSE ADD_MONTHS(BASE_LAST, MONTH_DELTA) + JIT_DAYS END,
+    TARGET_CNT,
+    ADD_MONTHS(BASE_CREATED, MONTH_DELTA) + JIT_DAYS,
+    ADD_MONTHS(BASE_UPDATED, MONTH_DELTA) + JIT_DAYS
+  FROM SHIFTED;
+
+  COMMIT;
+
+  ------------------------------------------------------------------------------
+  -- 4) 전년도 PAYMENT 생성 (가격 고정 + 지터 + 개수 일치)
+  ------------------------------------------------------------------------------
+  INSERT INTO PAYMENT (
+    PAY_ID, PAY_DATE, PAY_AMOUNT,
+    PAY_RESUME_CNT, PAY_COVER_CNT, PAY_CONSULT_CNT, PAY_MOCK_CNT,
+    MS_ID, IMP_UID, MERCHANT_UID
+  )
+  WITH BASE AS (
+    SELECT
+      p.PAY_ID,
+      p.MS_ID AS OLD_MS_ID,
+      ADD_MONTHS(p.PAY_DATE, -12) AS BASE_DATE,
+      p.IMP_UID,
+      p.MERCHANT_UID
+    FROM PAYMENT p
+    WHERE p.PAY_DATE BETWEEN p_2025_start AND p_2025_end
+  ),
+  RAND_DATE AS (
+    SELECT
+      b.*,
+      b.BASE_DATE + TRUNC(DBMS_RANDOM.VALUE(-p_jitter_days, p_jitter_days+1)) AS SHIFTED_RAW
+    FROM BASE b
+  ),
+  CLAMPED AS (
+    SELECT
+      r.*,
+      CASE
+        WHEN r.SHIFTED_RAW <  p_2024_start THEN p_2024_start
+        WHEN r.SHIFTED_RAW >  p_2024_end   THEN p_2024_end
+        ELSE r.SHIFTED_RAW
+      END AS SHIFTED_DATE
+    FROM RAND_DATE r
+  ),
+  JOINED AS (
+    SELECT
+      c.*,
+      m.NEW_MS_ID,
+      nm.SUB_ID,
+      nm.RECUR_PAY_CNT,
+      s.SUB_PRICE,
+      CASE s.SUB_ID WHEN 1 THEN 3 WHEN 2 THEN 6 WHEN 3 THEN 8 END AS RESUME_CNT_PER_PAY,
+      CASE s.SUB_ID WHEN 1 THEN 3 WHEN 2 THEN 6 WHEN 3 THEN 8 END AS COVER_CNT_PER_PAY,
+      CASE s.SUB_ID WHEN 1 THEN 3 WHEN 2 THEN 6 WHEN 3 THEN 8 END AS CONSULT_CNT_PER_PAY,
+      CASE s.SUB_ID WHEN 1 THEN 3 WHEN 2 THEN 6 WHEN 3 THEN 8 END AS MOCK_CNT_PER_PAY,
+      ROW_NUMBER() OVER (PARTITION BY m.NEW_MS_ID ORDER BY c.SHIFTED_DATE, c.PAY_ID) AS RN
+    FROM CLAMPED c
+    JOIN TEMP_MS_MAP m          ON m.OLD_MS_ID = c.OLD_MS_ID
+    JOIN MEMBER_SUBSCRIPTION nm ON nm.MS_ID     = m.NEW_MS_ID
+    JOIN SUBSCRIBE s            ON s.SUB_ID    = nm.SUB_ID
+    WHERE c.SHIFTED_DATE BETWEEN p_2024_start AND p_2024_end
+  )
+  SELECT
+    PAYMENT_SEQ.NEXTVAL,
+    j.SHIFTED_DATE,
+    j.SUB_PRICE,
+    j.RESUME_CNT_PER_PAY,
+    j.COVER_CNT_PER_PAY,
+    j.CONSULT_CNT_PER_PAY,
+    j.MOCK_CNT_PER_PAY,
+    j.NEW_MS_ID,
+    j.IMP_UID || '_ly',
+    'LY_' || j.MERCHANT_UID
+  FROM JOINED j
+  WHERE j.RN <= j.RECUR_PAY_CNT
+    AND NOT EXISTS (
+          SELECT 1 FROM PAYMENT p2
+           WHERE p2.MERCHANT_UID = 'LY_' || j.MERCHANT_UID
+              OR p2.IMP_UID      = j.IMP_UID || '_ly'
+        );
+
+  COMMIT;
+END;
+/
+BEGIN
+  GEN_LAST_YEAR_DATA;
 END;
 /
 
-CREATE GLOBAL TEMPORARY TABLE TEMP_MS_MAP (
-  OLD_MS_ID NUMBER PRIMARY KEY,
-  NEW_MS_ID NUMBER NOT NULL
-) ON COMMIT PRESERVE ROWS;
 
---------------------------------------------------------------------------------
--- 1) 올해 결제에 등장한 구독건만 대상 매핑(전년도용 신규 MS_ID 미리 할당)
---------------------------------------------------------------------------------
--- 0) 임시 매핑 테이블 초기화 (이미 있다면)
-TRUNCATE TABLE TEMP_MS_MAP;
+select *
+from payment
+where PAY_DATE like '2024%'
 
--- 1) 매핑 생성: DISTINCT는 안쪽, NEXTVAL은 바깥
-INSERT INTO TEMP_MS_MAP (OLD_MS_ID, NEW_MS_ID)
-SELECT
-  t.MS_ID,
-  MEMBER_SUBSCRIPTION_SEQ.NEXTVAL
-FROM (
-  SELECT DISTINCT p.MS_ID
-  FROM PAYMENT p
-  WHERE p.PAY_DATE BETWEEN DATE '2025-01-01' AND DATE '2025-12-31'
-) t;
+select *
+from MEMBER_SUBSCRIPTION
+where SUB_START_DT like '2024%'
 
-COMMIT;
+delete 
+from payment
+where PAY_DATE like '2024%';
 
---------------------------------------------------------------------------------
--- 2) 전년도용 MEMBER_SUBSCRIPTION 생성
---    * 날짜 -12개월, RECUR_PAY_CNT는 0.7±0.2 배 정도로 조정 (최소 1)
---    * CUSTOMER_UID에 "_ly" 접미사 부여 (중복 방지)
---    * 이미 같은 CUSTOMER_UID(_ly)가 있으면 스킵
---------------------------------------------------------------------------------
-INSERT INTO MEMBER_SUBSCRIPTION (
-  MS_ID, MEM_ID, SUB_ID, CUSTOMER_UID, SUB_STATUS,
-  SUB_START_DT, SUB_END_DT, LAST_PAY_DT,
-  RECUR_PAY_CNT, CREATED_DT, UPDATED_DT
-)
-SELECT
-  m.NEW_MS_ID,
-  ms.MEM_ID,
-  ms.SUB_ID,
-  ms.CUSTOMER_UID || '_ly',
-  'N',
-  ADD_MONTHS(ms.SUB_START_DT, -12),
-  ADD_MONTHS(ms.SUB_END_DT,   -12),
-  CASE WHEN ms.LAST_PAY_DT IS NULL THEN NULL ELSE ADD_MONTHS(ms.LAST_PAY_DT, -12) END,
-  GREATEST(1, ROUND(ms.RECUR_PAY_CNT * (0.7 + DBMS_RANDOM.VALUE(-0.2, 0.2)))),
-  ADD_MONTHS(ms.CREATED_DT, -12),
-  ADD_MONTHS(ms.UPDATED_DT, -12)
-FROM MEMBER_SUBSCRIPTION ms
-JOIN TEMP_MS_MAP m ON m.OLD_MS_ID = ms.MS_ID
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM MEMBER_SUBSCRIPTION ms2
-  WHERE ms2.CUSTOMER_UID = ms.CUSTOMER_UID || '_ly'
-);
 
-COMMIT;
+delete 
+from MEMBER_SUBSCRIPTION
+where SUB_START_DT like '2024%';
 
---------------------------------------------------------------------------------
--- 3) 전년도용 PAYMENT 생성
---    * 기준: 올해 결제 → -12개월 + (-5~+5일) 랜덤 이동
---    * 결과 날짜가 2024-01-01 ~ 2024-09-03 범위만 삽입
---    * 금액: 월별 스케일 * (±8% 랜덤), 100원 단위 반올림
---    * 카운트: 월별 스케일 * (±12% 랜덤), 음수 방지
---    * MS_ID: TEMP_MS_MAP으로 전년도 MS_ID 연결
---    * IMP_UID: 원본 + '_ly', MERCHANT_UID: 'LY_' || 원본 (중복 방지)
---------------------------------------------------------------------------------
-INSERT INTO PAYMENT (
-  PAY_ID, PAY_DATE, PAY_AMOUNT,
-  PAY_RESUME_CNT, PAY_COVER_CNT, PAY_CONSULT_CNT, PAY_MOCK_CNT,
-  MS_ID, IMP_UID, MERCHANT_UID
-)
-SELECT
-  PAYMENT_SEQ.NEXTVAL,
-  x.SHIFTED_DATE,
-  -- 금액: 월별 스케일 * (±8%) → 100원 단위 반올림
-  ROUND(x.PAY_AMOUNT * x.AMT_FACTOR / 100) * 100,
-  -- 카운트: 월별 스케일 * (±12%) → 0 미만 방지
-  GREATEST(0, ROUND(x.PAY_RESUME_CNT  * x.CNT_FACTOR)),
-  GREATEST(0, ROUND(x.PAY_COVER_CNT   * x.CNT_FACTOR)),
-  GREATEST(0, ROUND(x.PAY_CONSULT_CNT * x.CNT_FACTOR)),
-  GREATEST(0, ROUND(x.PAY_MOCK_CNT    * x.CNT_FACTOR)),
-  m.NEW_MS_ID,
-  x.IMP_UID || '_ly',
-  'LY_' || x.MERCHANT_UID
-FROM (
-  SELECT
-    p.*,
-    -- 전년도 날짜로 이동 + 소폭 랜덤(-5~+5일)
-    (ADD_MONTHS(p.PAY_DATE, -12) + ROUND(DBMS_RANDOM.VALUE(-5, 5))) AS SHIFTED_DATE,
-
-    -- *** 월별 스케일(전반적으로 2024년이 작게, 몇 달은 크게) ***
-    -- 카운트 스케일(±12% 랜덤 포함)
-    (
-      CASE TO_CHAR(ADD_MONTHS(p.PAY_DATE, -12), 'MM')
-        WHEN '01' THEN 0.60
-        WHEN '02' THEN 0.60
-        WHEN '03' THEN 1.15
-        WHEN '04' THEN 0.80
-        WHEN '05' THEN 1.30
-        WHEN '06' THEN 0.45
-        WHEN '07' THEN 0.55
-        WHEN '08' THEN 1.28   
-        WHEN '09' THEN 0.78
-        ELSE 0.85
-      END
-    ) * (1 + DBMS_RANDOM.VALUE(-0.12, 0.12)) AS CNT_FACTOR,
-
-    -- 금액 스케일(±8% 랜덤 포함) ? 8월만 살짝 크게, 나머진 작게
-    (
-      CASE TO_CHAR(ADD_MONTHS(p.PAY_DATE, -12), 'MM')
-        WHEN '01' THEN 0.60
-        WHEN '02' THEN 0.60
-        WHEN '03' THEN 1.15
-        WHEN '04' THEN 0.80
-        WHEN '05' THEN 1.30
-        WHEN '06' THEN 0.45
-        WHEN '07' THEN 0.55
-        WHEN '08' THEN 1.28   
-        WHEN '09' THEN 0.78
-        ELSE 0.85
-      END
-    ) * (1 + DBMS_RANDOM.VALUE(-0.08, 0.08)) AS AMT_FACTOR
-  FROM PAYMENT p
-  WHERE p.PAY_DATE BETWEEN DATE '2025-01-01' AND DATE '2025-12-31'
-) x
-JOIN TEMP_MS_MAP m ON m.OLD_MS_ID = x.MS_ID
-WHERE x.SHIFTED_DATE BETWEEN DATE '2024-01-01' AND DATE '2024-09-03'
-  -- 이미 만들어둔 전년도 결제가 있으면 중복 방지
-  AND NOT EXISTS (
-    SELECT 1 FROM PAYMENT p2
-    WHERE p2.MERCHANT_UID = 'LY_' || x.MERCHANT_UID
-  );
-
-COMMIT;
-
---------------------------------------------------------------------------------
--- (선택) 임시 매핑 테이블 정리
---------------------------------------------------------------------------------
-TRUNCATE TABLE TEMP_MS_MAP;
--- DROP TABLE TEMP_MS_MAP PURGE;  -- 필요하면 드롭
+commit;
